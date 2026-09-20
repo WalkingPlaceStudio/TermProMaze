@@ -1,0 +1,123 @@
+#!/bin/bash
+
+# --- Color Scheme (The "Realistic" Text Render) ---
+RESET="\033[0m"
+WALL="\033[48;5;236m\033[38;5;244m██\033[0m"       # Dark steel textured blocks
+FLOOR="\033[48;5;234m\033[38;5;237m░░\033[0m"      # Dimly lit floor tiling
+PLAYER="\033[48;5;234m\033[1;38;5;81m웃\033[0m"     # Glowing cyan player sprite
+EXIT="\033[48;5;52m\033[1;38;5;196m🚪\033[0m"      # Deep crimson heavy exit door
+BORDER="\033[1;38;5;242m"                         # Clean gray color for bezels
+
+# --- Map Setup ---
+MAP_SIZE=50
+VIEW_SIZE=15 # Camera size around the player
+
+# Generate blank map filled with walls
+declare -A map
+for ((y=0; y<MAP_SIZE; y++)); do
+    for ((x=0; x<MAP_SIZE; x++)); do
+        map[$x,$y]=1
+    done
+done
+
+# Basic procedural maze path carving
+for ((y=1; y<MAP_SIZE-1; y+=2)); do
+    for ((x=1; x<MAP_SIZE-1; x+=2)); do
+        map[$x,$y]=0
+        if (( y > 1 && (RANDOM % 2 == 0 || x == MAP_SIZE-2) )); then
+            map[$x,$((y-1))]=0
+        elif (( x < MAP_SIZE-2 )); then
+            map[$((x+1)),$y]=0
+        fi
+    done
+done
+
+# Clear out a 3x3 open spawn room and a 3x3 exit courtyard
+for ((y=1; y<=3; y++)); do for ((x=1; x<=3; x++)); do map[$x,$y]=0; done; done
+for ((y=MAP_SIZE-4; y<=MAP_SIZE-2; y++)); do for ((x=MAP_SIZE-4; x<=MAP_SIZE-2; x++)); do map[$x,$y]=0; done; done
+
+# Fix the Exit Location permanently at the far corner
+EXIT_X=$((MAP_SIZE - 2))
+EXIT_Y=$((MAP_SIZE - 2))
+map[$EXIT_X,$EXIT_Y]=2
+
+# --- Anti-Exit Spawn Logic ---
+# Forces player to spawn at (2,2). Ensures mathematical separation from the exit at (48,48)
+P_X=2
+P_Y=2
+
+# --- Render Camera Engine ---
+draw_map() {
+    clear
+    echo -e "${BORDER}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${RESET}"
+    
+    # Calculate screen centering camera view offsets
+    local start_x=$(( P_X - VIEW_SIZE / 2 ))
+    local start_y=$(( P_Y - VIEW_SIZE / 2 ))
+    
+    # Keep camera boundary inside the map limits
+    (( start_x < 0 )) && start_x=0
+    (( start_y < 0 )) && start_y=0
+    (( start_x + VIEW_SIZE > MAP_SIZE )) && start_x=$(( MAP_SIZE - VIEW_SIZE ))
+    (( start_y + VIEW_SIZE > MAP_SIZE )) && start_y=$(( MAP_SIZE - VIEW_SIZE ))
+
+    for ((y=start_y; y<start_y+VIEW_SIZE; y++)); do
+        local line="${BORDER}┃${RESET}"
+        for ((x=start_x; x<start_x+VIEW_SIZE; x++)); do
+            if (( x == P_X && y == P_Y )); then
+                line+="$PLAYER"
+            elif [[ "${map[$x,$y]}" == "2" ]]; then
+                line+="$EXIT"
+            elif [[ "${map[$x,$y]}" == "1" ]]; then
+                line+="$WALL"
+            else
+                line+="$FLOOR"
+            fi
+        done
+        line+="${BORDER}┃${RESET}"
+        echo -e "$line"
+    done
+    
+    # --- High-Tech Custom Bezel Display ---
+    echo -e "${BORDER}┗━━━━━━━ \033[1;36mTermProMaze\033[0m${BORDER} ━━━━━━━┛${RESET}"
+    echo -e "\033[1;33mControls: W/A/S/D | Q to Quit\033[0m"
+}
+
+# --- Game loop ---
+stty -icanon -echo
+trap "stty cooked echo; exit" EXIT
+
+while true; do
+    draw_map
+    
+    # Check Win Condition
+    if (( P_X == EXIT_X && P_Y == EXIT_Y )); then
+        stty cooked echo
+        clear
+        echo -e "\033[1;32m🎉 VICTORY! You escaped TermProMaze! 🎉\033[0m"
+        exit 0
+    fi
+
+    # Read single character inputs instantly
+    read -n 1 key
+    
+    move_x=0
+    move_y=0
+    case "$key" in
+        [wW]) move_y=-1 ;;
+        [sS]) move_y=1 ;;
+        [aA]) move_x=-1 ;;
+        [dD]) move_x=1 ;;
+        [qQ]) break ;;
+    esac
+
+    # Collision handling system
+    next_x=$(( P_X + move_x ))
+    next_y=$(( P_Y + move_y ))
+    
+    if [[ "${map[$next_x,$next_y]}" != "1" ]]; then
+        P_X=$next_x
+        P_Y=$next_y
+    fi
+done
+
