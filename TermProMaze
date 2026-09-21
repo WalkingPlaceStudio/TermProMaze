@@ -8,116 +8,169 @@ PLAYER="\033[48;5;234m\033[1;38;5;81m웃\033[0m"     # Glowing cyan player sprit
 EXIT="\033[48;5;52m\033[1;38;5;196m🚪\033[0m"      # Deep crimson heavy exit door
 BORDER="\033[1;38;5;242m"                         # Clean gray color for bezels
 
-# --- Map Setup ---
-MAP_SIZE=50
-VIEW_SIZE=15 # Camera size around the player
+# --- Level Selector Menu ---
+clear
+echo -e "\033[1;36m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\033[0m"
+echo -e "\033[1;36m┃       SELECT YOUR LEVEL TIER       ┃\033[0m"
+echo -e "\033[1;36m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\033[0m"
+echo -e " Tier A: Levels 1 - 5   (Simple and easy)"
+echo -e " Tier B: Levels 6 - 10  (A little hard)"
+echo -e " Custom Tier: Choose your own range (Pick out your limit)"
+echo -n "Select option (1, 2, or 3): "
+read -r tier_choice
 
-# Generate blank map filled with walls
-declare -A map
-for ((y=0; y<MAP_SIZE; y++)); do
-    for ((x=0; x<MAP_SIZE; x++)); do
-        map[$x,$y]=1
-    done
-done
-
-# Basic procedural maze path carving
-for ((y=1; y<MAP_SIZE-1; y+=2)); do
-    for ((x=1; x<MAP_SIZE-1; x+=2)); do
-        map[$x,$y]=0
-        if (( y > 1 && (RANDOM % 2 == 0 || x == MAP_SIZE-2) )); then
-            map[$x,$((y-1))]=0
-        elif (( x < MAP_SIZE-2 )); then
-            map[$((x+1)),$y]=0
-        fi
-    done
-done
-
-# Clear out a 3x3 open spawn room and a 3x3 exit courtyard
-for ((y=1; y<=3; y++)); do for ((x=1; x<=3; x++)); do map[$x,$y]=0; done; done
-for ((y=MAP_SIZE-4; y<=MAP_SIZE-2; y++)); do for ((x=MAP_SIZE-4; x<=MAP_SIZE-2; x++)); do map[$x,$y]=0; done; done
-
-# Fix the Exit Location permanently at the far corner
-EXIT_X=$((MAP_SIZE - 2))
-EXIT_Y=$((MAP_SIZE - 2))
-map[$EXIT_X,$EXIT_Y]=2
-
-# --- Anti-Exit Spawn Logic ---
-# Forces player to spawn at (2,2). Ensures mathematical separation from the exit at (48,48)
-P_X=2
-P_Y=2
-
-# --- Render Camera Engine ---
-draw_map() {
-    clear
-    echo -e "${BORDER}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${RESET}"
+if [[ "$tier_choice" == "3" ]]; then
+    echo -n "Enter STARTING level (Max 100000): "
+    read -r START_LEVEL
+    echo -n "Enter ENDING level (Max 100000): "
+    read -r END_LEVEL
     
-    # Calculate screen centering camera view offsets
-    local start_x=$(( P_X - VIEW_SIZE / 2 ))
-    local start_y=$(( P_Y - VIEW_SIZE / 2 ))
-    
-    # Keep camera boundary inside the map limits
-    (( start_x < 0 )) && start_x=0
-    (( start_y < 0 )) && start_y=0
-    (( start_x + VIEW_SIZE > MAP_SIZE )) && start_x=$(( MAP_SIZE - VIEW_SIZE ))
-    (( start_y + VIEW_SIZE > MAP_SIZE )) && start_y=$(( MAP_SIZE - VIEW_SIZE ))
+    # 100k Maximum Cap Constraints
+    (( START_LEVEL < 1 )) && START_LEVEL=1
+    (( START_LEVEL > 100000 )) && START_LEVEL=100000
+    (( END_LEVEL < START_LEVEL )) && END_LEVEL=$START_LEVEL
+    (( END_LEVEL > 100000 )) && END_LEVEL=100000
+    LEVEL=$START_LEVEL
+elif [[ "$tier_choice" == "2" ]]; then
+    START_LEVEL=6
+    END_LEVEL=10
+    echo -n "Enter specific level (6-10): "
+    read -r LEVEL
+    (( LEVEL < 6 || LEVEL > 10 )) && LEVEL=6
+else
+    START_LEVEL=1
+    END_LEVEL=5
+    echo -n "Enter specific level (1-5): "
+    read -r LEVEL
+    (( LEVEL < 1 || LEVEL > 5 )) && LEVEL=1
+fi
 
-    for ((y=start_y; y<start_y+VIEW_SIZE; y++)); do
-        local line="${BORDER}┃${RESET}"
-        for ((x=start_x; x<start_x+VIEW_SIZE; x++)); do
-            if (( x == P_X && y == P_Y )); then
-                line+="$PLAYER"
-            elif [[ "${map[$x,$y]}" == "2" ]]; then
-                line+="$EXIT"
-            elif [[ "${map[$x,$y]}" == "1" ]]; then
-                line+="$WALL"
-            else
-                line+="$FLOOR"
+# --- Master Game Loop for Progression ---
+while (( LEVEL <= END_LEVEL )); do
+
+    # --- Scaling Difficulty Parameters ---
+    MAP_CALC=$(( 30 + (LEVEL * 4) ))
+    if (( MAP_CALC > 150 )); then
+        MAP_SIZE=150
+    else
+        MAP_SIZE=$MAP_CALC
+    fi
+    VIEW_SIZE=15 
+
+    # Generate blank map filled with walls
+    declare -A map
+    for ((y=0; y<MAP_SIZE; y++)); do
+        for ((x=0; x<MAP_SIZE; x++)); do
+            map[$x,$y]=1
+        done
+    done
+
+    # Basic procedural maze path carving
+    for ((y=1; y<MAP_SIZE-1; y+=2)); do
+        for ((x=1; x<MAP_SIZE-1; x+=2)); do
+            map[$x,$y]=0
+            if (( y > 1 && (RANDOM % 2 == 0 || x == MAP_SIZE-2) )); then
+                map[$x,$((y-1))]=0
+            elif (( x < MAP_SIZE-2 )); then
+                map[$((x+1)),$y]=0
             fi
         done
-        line+="${BORDER}┃${RESET}"
-        echo -e "$line"
     done
-    
-    # --- High-Tech Custom Bezel Display ---
-    echo -e "${BORDER}┗━━━━━━━ \033[1;36mTermProMaze\033[0m${BORDER} ━━━━━━━┛${RESET}"
-    echo -e "\033[1;33mControls: W/A/S/D | Q to Quit\033[0m"
-}
 
-# --- Game loop ---
-stty -icanon -echo
-trap "stty cooked echo; exit" EXIT
+    # Clear out open spawn room and exit courtyard
+    for ((y=1; y<=3; y++)); do for ((x=1; x<=3; x++)); do map[$x,$y]=0; done; done
+    for ((y=MAP_SIZE-4; y<=MAP_SIZE-2; y++)); do for ((x=MAP_SIZE-4; x<=MAP_SIZE-2; x++)); do map[$x,$y]=0; done; done
 
-while true; do
-    draw_map
-    
-    # Check Win Condition
-    if (( P_X == EXIT_X && P_Y == EXIT_Y )); then
+    # Anti-Exit Spawn: Fix the Exit Location permanently at the far corner
+    EXIT_X=$((MAP_SIZE - 2))
+    EXIT_Y=$((MAP_SIZE - 2))
+    map[$EXIT_X,$EXIT_Y]=2
+
+    P_X=2
+    P_Y=2
+
+    # --- Render Camera Engine ---
+    draw_map() {
+        clear
+        local border_line="┏"
+        for ((i=0; i<VIEW_SIZE; i++)); do border_line+="━━"; done
+        border_line+="┓"
+        echo -e "${BORDER}${border_line}${RESET}"
+        
+        local start_x=$(( P_X - VIEW_SIZE / 2 ))
+        local start_y=$(( P_Y - VIEW_SIZE / 2 ))
+        
+        (( start_x < 0 )) && start_x=0
+        (( start_y < 0 )) && start_y=0
+        (( start_x + VIEW_SIZE > MAP_SIZE )) && start_x=$(( MAP_SIZE - VIEW_SIZE ))
+        (( start_y + VIEW_SIZE > MAP_SIZE )) && start_y=$(( MAP_SIZE - VIEW_SIZE ))
+
+        for ((y=start_y; y<start_y+VIEW_SIZE; y++)); do
+            local line="${BORDER}┃${RESET}"
+            for ((x=start_x; x<start_x+VIEW_SIZE; x++)); do
+                if (( x == P_X && y == P_Y )); then
+                    line+="$PLAYER"
+                elif [[ "${map[$x,$y]}" == "2" ]]; then
+                    line+="$EXIT"
+                elif [[ "${map[$x,$y]}" == "1" ]]; then
+                    line+="$WALL"
+                else
+                    line+="$FLOOR"
+                fi
+            done
+            line+="${BORDER}┃${RESET}"
+            echo -e "$line"
+        done
+        
+        # Custom Dynamic Bottom Bezel Layout showing current level progress
+        echo -e "${BORDER}┗━━━━━━━ \033[1;36mTermProMaze LV:$LEVEL/$END_LEVEL\033[0m${BORDER} ━━━━━━━┛${RESET}"
+        echo -e "\033[1;33mControls: W/A/S/D | Q to Quit\033[0m"
+    }
+
+    # --- Inside Single Level Loop ---
+    stty -icanon -echo
+    trap "stty cooked echo; exit" EXIT
+
+    level_won=false
+    while true; do
+        draw_map
+        
+        if (( P_X == EXIT_X && P_Y == EXIT_Y )); then
+            level_won=true
+            break
+        fi
+
+        read -n 1 key
+        move_x=0
+        move_y=0
+        case "$key" in
+            [wW]) move_y=-1 ;;
+            [sS]) move_y=1 ;;
+            [aA]) move_x=-1 ;;
+            [dD]) move_x=1 ;;
+            [qQ]) stty cooked echo; clear; exit 0 ;;
+        esac
+
+        next_x=$(( P_X + move_x ))
+        next_y=$(( P_Y + move_y ))
+        
+        if [[ "${map[$next_x,$next_y]}" != "1" ]]; then
+            P_X=$next_x
+            P_Y=$next_y
+        fi
+    done
+
+    # Handle completion transition or total victory
+    if [ "$level_won" = true ]; then
         stty cooked echo
         clear
-        echo -e "\033[1;32m🎉 VICTORY! You escaped TermProMaze! 🎉\033[0m"
-        exit 0
-    fi
-
-    # Read single character inputs instantly
-    read -n 1 key
-    
-    move_x=0
-    move_y=0
-    case "$key" in
-        [wW]) move_y=-1 ;;
-        [sS]) move_y=1 ;;
-        [aA]) move_x=-1 ;;
-        [dD]) move_x=1 ;;
-        [qQ]) break ;;
-    esac
-
-    # Collision handling system
-    next_x=$(( P_X + move_x ))
-    next_y=$(( P_Y + move_y ))
-    
-    if [[ "${map[$next_x,$next_y]}" != "1" ]]; then
-        P_X=$next_x
-        P_Y=$next_y
+        if (( LEVEL == END_LEVEL )); then
+            echo -e "\033[1;32m🎉 TOTAL VICTORY! You conquered your Custom Tier at Level $LEVEL! 🎉\033[0m"
+            exit 0
+        else
+            echo -e "\033[1;33mLevel $LEVEL Completed! Loading next map layer...\033[0m"
+            sleep 1.0
+            (( LEVEL++ ))
+        fi
     fi
 done
-
