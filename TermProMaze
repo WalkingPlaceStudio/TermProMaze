@@ -1,14 +1,23 @@
 #!/bin/bash
-
 RESET="\033[0m"
-WALL="\033[48;5;236m\033[38;5;244m██\033[0m"
-FLOOR="\033[48;5;234m\033[38;5;237m░░\033[0m"
-PLAYER="\033[48;5;234m\033[1;38;5;81m웃\033[0m"
-EXIT="\033[48;5;52m\033[1;38;5;196m🚪\033[0m"
-BORDER="\033[1;38;5;242m"
-ENEMY="\033[48;5;234m\033[1;38;5;160m👾\033[0m"
-KEYCARD="\033[48;5;234m\033[1;38;5;220m🔑\033[0m"
-GATE="\033[48;5;236m\033[1;38;5;208m🔒\033[0m"
+WALL="\033[48;5;236m\033[38;5;244m██\033[0m"       
+FLOOR="\033[48;5;234m\033[38;5;237m░░\033[0m"      
+PLAYER="\033[48;5;234m\033[1;38;5;81m웃\033[0m"     
+EXIT="\033[48;5;52m\033[1;38;5;196m🚪\033[0m"      
+BORDER="\033[1;38;5;242m"                         
+ENEMY="\033[48;5;234m\033[1;38;5;160m👾\033[0m"     
+KEYCARD="\033[48;5;234m\033[1;38;5;220m🔑\033[0m"   
+GATE="\033[48;5;236m\033[1;38;5;208m🔒\033[0m"      
+
+clear
+echo -e "\033[1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "\033[1;31m                          WARNING                              \033[0m"
+echo -e "\033[1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "\033[1;37m WARNING: EPILEPSY WARNING PLAYING THIS GAME COULD CAUSE       \033[0m"
+echo -e "\033[1;37m EPILEPSY PLEASE BE CAREFUL.                                   \033[0m"
+echo -e "\033[1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -n "Press [ENTER] to confirm acknowledgement and proceed..."
+read -r null_trigger
 
 clear
 echo -e "\033[1;36m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\033[0m"
@@ -45,22 +54,22 @@ else
 fi
 
 TOTAL_STEPS=0
+cleanup() {
+    stty cooked echo
+    clear
+    exit 0
+}
+trap cleanup EXIT INT TERM
 
 while (( LEVEL <= END_LEVEL )); do
     HAS_KEY=false
     MAP_CALC=$(( 30 + (LEVEL * 4) ))
-    if (( MAP_CALC > 150 )); then
-        MAP_SIZE=150
-    else
-        MAP_SIZE=$MAP_CALC
-    fi
+    if (( MAP_CALC > 150 )); then MAP_SIZE=150; else MAP_SIZE=$MAP_CALC; fi
     VIEW_SIZE=15 
 
     declare -A map
     for ((y=0; y<MAP_SIZE; y++)); do
-        for ((x=0; x<MAP_SIZE; x++)); do
-            map[$x,$y]=1
-        done
+        for ((x=0; x<MAP_SIZE; x++)); do map[$x,$y]=1; done
     done
 
     for ((y=1; y<MAP_SIZE-1; y+=2)); do
@@ -80,88 +89,69 @@ while (( LEVEL <= END_LEVEL )); do
     EXIT_X=$((MAP_SIZE - 2))
     EXIT_Y=$((MAP_SIZE - 2))
     map[$EXIT_X,$EXIT_Y]=2
-
     GATE_X=$((MAP_SIZE - 3))
     GATE_Y=$((MAP_SIZE - 2))
     map[$GATE_X,$GATE_Y]=4
-
     KEY_X=$(( (RANDOM % (MAP_SIZE - 10)) + 5 ))
     KEY_Y=$(( (RANDOM % (MAP_SIZE - 10)) + 5 ))
     map[$KEY_X,$KEY_Y]=3
-
-    P_X=2
-    P_Y=2
-    E_X=$((MAP_SIZE - 5))
-    E_Y=$((MAP_SIZE - 5))
+    P_X=2; P_Y=2
+    E_X=$((MAP_SIZE - 5)); E_Y=$((MAP_SIZE - 5))
 
     draw_map() {
-        clear
+        echo -ne "\033[H"
+        local out=""
         local border_line="┏"
         for ((i=0; i<VIEW_SIZE; i++)); do border_line+="━━"; done
-        border_line+="┓"
-        echo -e "${BORDER}${border_line}${RESET}"
+        border_line+="┓\n"
+        out+="${BORDER}${border_line}${RESET}"
         
         local start_x=$(( P_X - VIEW_SIZE / 2 ))
         local start_y=$(( P_Y - VIEW_SIZE / 2 ))
-        
         (( start_x < 0 )) && start_x=0
         (( start_y < 0 )) && start_y=0
         (( start_x + VIEW_SIZE > MAP_SIZE )) && start_x=$(( MAP_SIZE - VIEW_SIZE ))
         (( start_y + VIEW_SIZE > MAP_SIZE )) && start_y=$(( MAP_SIZE - VIEW_SIZE ))
 
         for ((y=start_y; y<start_y+VIEW_SIZE; y++)); do
-            local line="${BORDER}┃${RESET}"
+            out+="${BORDER}┃${RESET}"
             for ((x=start_x; x<start_x+VIEW_SIZE; x++)); do
-                if (( x == P_X && y == P_Y )); then
-                    line+="$PLAYER"
-                elif (( x == E_X && y == E_Y )); then
-                    line+="$ENEMY"
-                elif [[ "${map[$x,$y]}" == "2" ]]; then
-                    line+="$EXIT"
-                elif [[ "${map[$x,$y]}" == "3" ]]; then
-                    line+="$KEYCARD"
-                elif [[ "${map[$x,$y]}" == "4" ]]; then
-                    line+="$GATE"
-                elif [[ "${map[$x,$y]}" == "1" ]]; then
-                    line+="$WALL"
-                else
-                    line+="$FLOOR"
-                fi
+                if (( x == P_X && y == P_Y )); then out+="$PLAYER"
+                elif (( x == E_X && y == E_Y )); then out+="$ENEMY"
+                elif [[ "${map[$x,$y]}" == "2" ]]; then out+="$EXIT"
+                elif [[ "${map[$x,$y]}" == "3" ]]; then out+="$KEYCARD"
+                elif [[ "${map[$x,$y]}" == "4" ]]; then out+="$GATE"
+                elif [[ "${map[$x,$y]}" == "1" ]]; then out+="$WALL"
+                else out+="$FLOOR"; fi
             done
-            line+="${BORDER}┃${RESET}"
-            echo -e "$line"
+            out+="${BORDER}┃${RESET}\n"
         done
         
         local status_key="❌"
         [ "$HAS_KEY" = true ] && status_key="🔑"
-        echo -e "${BORDER}┗━━━━ \033[1;36mTermProMaze LV:$LEVEL\033[0m${BORDER} ━━━━┛${RESET}"
-        echo -e "\033[1;37m[ KEY: $status_key ]  [ STEPS RUN: \033[1;32m$TOTAL_STEPS\033[0m\033[1;37m ]\033[0m"
-        echo -e "\033[1;33mControls: W/A/S/D | Q to Quit\033[0m"
+        out+="${BORDER}┗━━━━ \033[1;36mTermProMaze LV:${LEVEL}\033[0m${BORDER} ━━━━┛${RESET}\n"
+        out+="\033[1;37m[ KEY: ${status_key} ]  [ STEPS RUN: \033[1;32m${TOTAL_STEPS}\033[0m\033[1;37m ]\033[0m\n"
+        out+="\033[1;33mControls: W/A/S/D | Q to Quit\033[0m\n"
+        echo -ne "$out"
     }
 
     stty -icanon -echo
-    trap "stty cooked echo; exit" EXIT
-
+    clear
+    ENEMY_TICK_COUNTER=0
     level_won=false
+
     while true; do
         draw_map
-        
         if (( P_X == E_X && P_Y == E_Y )); then
-            stty cooked echo
-            clear
-            echo -e "\033[1;31m💀 GAME OVER! The Rogue Sentinel tracking grid intercepted you at Level $LEVEL! 💀\033[0m"
-            echo -e "\033[1;37mTotal performance score step count: $TOTAL_STEPS\033[0m"
-            exit 0
+            stty cooked echo; clear
+            echo -e "\033[1;31m💀 GAME OVER! The Rogue Sentinel caught you at Level $LEVEL! 💀\033[0m"
+            echo -e "\033[1;37mTotal steps: $TOTAL_STEPS\033[0m"; exit 0
         fi
+        if (( P_X == EXIT_X && P_Y == EXIT_Y )); then level_won=true; break; fi
 
-        if (( P_X == EXIT_X && P_Y == EXIT_Y )); then
-            level_won=true
-            break
-        fi
-
-        read -n 1 key
-        move_x=0
-        move_y=0
+        key=""
+        read -r -s -t 0.02 -n 1 key
+        move_x=0; move_y=0
         case "$key" in
             [wW]) move_y=-1 ;;
             [sS]) move_y=1 ;;
@@ -170,25 +160,22 @@ while (( LEVEL <= END_LEVEL )); do
             [qQ]) stty cooked echo; clear; exit 0 ;;
         esac
 
-        next_x=$(( P_X + move_x ))
-        next_y=$(( P_Y + move_y ))
-        
-        if [[ "${map[$next_x,$next_y]}" != "1" ]]; then
-            if [[ "${map[$next_x,$next_y]}" == "4" && "$HAS_KEY" = false ]]; then
-                continue
-            elif [[ "${map[$next_x,$next_y]}" == "4" && "$HAS_KEY" = true ]]; then
-                map[$next_x,$next_y]=0
+        if (( move_x != 0 || move_y != 0 )); then
+            next_x=$(( P_X + move_x ))
+            next_y=$(( P_Y + move_y ))
+            if [[ "${map[$next_x,$next_y]}" != "1" ]]; then
+                if [[ "${map[$next_x,$next_y]}" == "4" && "$HAS_KEY" = false ]]; then :
+                else
+                    if [[ "${map[$next_x,$next_y]}" == "4" && "$HAS_KEY" = true ]]; then map[$next_x,$next_y]=0; fi
+                    if [[ "${map[$next_x,$next_y]}" == "3" ]]; then HAS_KEY=true; map[$next_x,$next_y]=0; fi
+                    P_X=$next_x; P_Y=$next_y; (( TOTAL_STEPS++ ))
+                fi
             fi
+        fi
 
-            if [[ "${map[$next_x,$next_y]}" == "3" ]]; then
-                HAS_KEY=true
-                map[$next_x,$next_y]=0
-            fi
-
-            P_X=$next_x
-            P_Y=$next_y
-            (( TOTAL_STEPS++ ))
-
+        (( ENEMY_TICK_COUNTER++ ))
+        if (( ENEMY_TICK_COUNTER >= 15 )); then 
+            ENEMY_TICK_COUNTER=0
             if (( RANDOM % 100 < 85 )); then
                 if (( E_X < P_X && "${map[$((E_X+1)),$E_Y]}" != "1" )); then (( E_X++ ))
                 elif (( E_X > P_X && "${map[$((E_X-1)),$E_Y]}" != "1" )); then (( E_X-- ))
@@ -200,15 +187,12 @@ while (( LEVEL <= END_LEVEL )); do
     done
 
     if [ "$level_won" = true ]; then
-        stty cooked echo
-        clear
+        stty cooked echo; clear
         if (( LEVEL == END_LEVEL )); then
-            echo -e "\033[1;32m🎉 TOTAL S-TIER VICTORY! You escaped with a score of $TOTAL_STEPS steps! 🎉\033[0m"
-            exit 0
+            echo -e "\033[1;32m🎉 TOTAL S-TIER VICTORY! Steps: $TOTAL_STEPS 🎉\033[0m"; exit 0
         else
-            echo -e "\033[1;33mLevel $LEVEL Cleared! Gate bypassed. Initializing next configuration vector...\033[0m"
-            sleep 1.2
-            (( LEVEL++ ))
+            echo -e "\033[1;33mLevel $LEVEL Cleared! Next layer loading...\033[0m"
+            sleep 1.2; (( LEVEL++ ))
         fi
     fi
 done
