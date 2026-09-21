@@ -1,14 +1,15 @@
 #!/bin/bash
 
-# --- Color Scheme (The "Realistic" Text Render) ---
 RESET="\033[0m"
-WALL="\033[48;5;236m\033[38;5;244m██\033[0m"       # Dark steel textured blocks
-FLOOR="\033[48;5;234m\033[38;5;237m░░\033[0m"      # Dimly lit floor tiling
-PLAYER="\033[48;5;234m\033[1;38;5;81m웃\033[0m"     # Glowing cyan player sprite
-EXIT="\033[48;5;52m\033[1;38;5;196m🚪\033[0m"      # Deep crimson heavy exit door
-BORDER="\033[1;38;5;242m"                         # Clean gray color for bezels
+WALL="\033[48;5;236m\033[38;5;244m██\033[0m"
+FLOOR="\033[48;5;234m\033[38;5;237m░░\033[0m"
+PLAYER="\033[48;5;234m\033[1;38;5;81m웃\033[0m"
+EXIT="\033[48;5;52m\033[1;38;5;196m🚪\033[0m"
+BORDER="\033[1;38;5;242m"
+ENEMY="\033[48;5;234m\033[1;38;5;160m👾\033[0m"
+KEYCARD="\033[48;5;234m\033[1;38;5;220m🔑\033[0m"
+GATE="\033[48;5;236m\033[1;38;5;208m🔒\033[0m"
 
-# --- Level Selector Menu ---
 clear
 echo -e "\033[1;36m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\033[0m"
 echo -e "\033[1;36m┃       SELECT YOUR LEVEL TIER       ┃\033[0m"
@@ -24,8 +25,6 @@ if [[ "$tier_choice" == "3" ]]; then
     read -r START_LEVEL
     echo -n "Enter ENDING level (Max 100000): "
     read -r END_LEVEL
-    
-    # 100k Maximum Cap Constraints
     (( START_LEVEL < 1 )) && START_LEVEL=1
     (( START_LEVEL > 100000 )) && START_LEVEL=100000
     (( END_LEVEL < START_LEVEL )) && END_LEVEL=$START_LEVEL
@@ -45,10 +44,10 @@ else
     (( LEVEL < 1 || LEVEL > 5 )) && LEVEL=1
 fi
 
-# --- Master Game Loop for Progression ---
-while (( LEVEL <= END_LEVEL )); do
+TOTAL_STEPS=0
 
-    # --- Scaling Difficulty Parameters ---
+while (( LEVEL <= END_LEVEL )); do
+    HAS_KEY=false
     MAP_CALC=$(( 30 + (LEVEL * 4) ))
     if (( MAP_CALC > 150 )); then
         MAP_SIZE=150
@@ -57,7 +56,6 @@ while (( LEVEL <= END_LEVEL )); do
     fi
     VIEW_SIZE=15 
 
-    # Generate blank map filled with walls
     declare -A map
     for ((y=0; y<MAP_SIZE; y++)); do
         for ((x=0; x<MAP_SIZE; x++)); do
@@ -65,7 +63,6 @@ while (( LEVEL <= END_LEVEL )); do
         done
     done
 
-    # Basic procedural maze path carving
     for ((y=1; y<MAP_SIZE-1; y+=2)); do
         for ((x=1; x<MAP_SIZE-1; x+=2)); do
             map[$x,$y]=0
@@ -77,19 +74,26 @@ while (( LEVEL <= END_LEVEL )); do
         done
     done
 
-    # Clear out open spawn room and exit courtyard
     for ((y=1; y<=3; y++)); do for ((x=1; x<=3; x++)); do map[$x,$y]=0; done; done
     for ((y=MAP_SIZE-4; y<=MAP_SIZE-2; y++)); do for ((x=MAP_SIZE-4; x<=MAP_SIZE-2; x++)); do map[$x,$y]=0; done; done
 
-    # Anti-Exit Spawn: Fix the Exit Location permanently at the far corner
     EXIT_X=$((MAP_SIZE - 2))
     EXIT_Y=$((MAP_SIZE - 2))
     map[$EXIT_X,$EXIT_Y]=2
 
+    GATE_X=$((MAP_SIZE - 3))
+    GATE_Y=$((MAP_SIZE - 2))
+    map[$GATE_X,$GATE_Y]=4
+
+    KEY_X=$(( (RANDOM % (MAP_SIZE - 10)) + 5 ))
+    KEY_Y=$(( (RANDOM % (MAP_SIZE - 10)) + 5 ))
+    map[$KEY_X,$KEY_Y]=3
+
     P_X=2
     P_Y=2
+    E_X=$((MAP_SIZE - 5))
+    E_Y=$((MAP_SIZE - 5))
 
-    # --- Render Camera Engine ---
     draw_map() {
         clear
         local border_line="┏"
@@ -110,8 +114,14 @@ while (( LEVEL <= END_LEVEL )); do
             for ((x=start_x; x<start_x+VIEW_SIZE; x++)); do
                 if (( x == P_X && y == P_Y )); then
                     line+="$PLAYER"
+                elif (( x == E_X && y == E_Y )); then
+                    line+="$ENEMY"
                 elif [[ "${map[$x,$y]}" == "2" ]]; then
                     line+="$EXIT"
+                elif [[ "${map[$x,$y]}" == "3" ]]; then
+                    line+="$KEYCARD"
+                elif [[ "${map[$x,$y]}" == "4" ]]; then
+                    line+="$GATE"
                 elif [[ "${map[$x,$y]}" == "1" ]]; then
                     line+="$WALL"
                 else
@@ -122,12 +132,13 @@ while (( LEVEL <= END_LEVEL )); do
             echo -e "$line"
         done
         
-        # Custom Dynamic Bottom Bezel Layout showing current level progress
-        echo -e "${BORDER}┗━━━━━━━ \033[1;36mTermProMaze LV:$LEVEL/$END_LEVEL\033[0m${BORDER} ━━━━━━━┛${RESET}"
+        local status_key="❌"
+        [ "$HAS_KEY" = true ] && status_key="🔑"
+        echo -e "${BORDER}┗━━━━ \033[1;36mTermProMaze LV:$LEVEL\033[0m${BORDER} ━━━━┛${RESET}"
+        echo -e "\033[1;37m[ KEY: $status_key ]  [ STEPS RUN: \033[1;32m$TOTAL_STEPS\033[0m\033[1;37m ]\033[0m"
         echo -e "\033[1;33mControls: W/A/S/D | Q to Quit\033[0m"
     }
 
-    # --- Inside Single Level Loop ---
     stty -icanon -echo
     trap "stty cooked echo; exit" EXIT
 
@@ -135,6 +146,14 @@ while (( LEVEL <= END_LEVEL )); do
     while true; do
         draw_map
         
+        if (( P_X == E_X && P_Y == E_Y )); then
+            stty cooked echo
+            clear
+            echo -e "\033[1;31m💀 GAME OVER! The Rogue Sentinel tracking grid intercepted you at Level $LEVEL! 💀\033[0m"
+            echo -e "\033[1;37mTotal performance score step count: $TOTAL_STEPS\033[0m"
+            exit 0
+        fi
+
         if (( P_X == EXIT_X && P_Y == EXIT_Y )); then
             level_won=true
             break
@@ -155,21 +174,40 @@ while (( LEVEL <= END_LEVEL )); do
         next_y=$(( P_Y + move_y ))
         
         if [[ "${map[$next_x,$next_y]}" != "1" ]]; then
+            if [[ "${map[$next_x,$next_y]}" == "4" && "$HAS_KEY" = false ]]; then
+                continue
+            elif [[ "${map[$next_x,$next_y]}" == "4" && "$HAS_KEY" = true ]]; then
+                map[$next_x,$next_y]=0
+            fi
+
+            if [[ "${map[$next_x,$next_y]}" == "3" ]]; then
+                HAS_KEY=true
+                map[$next_x,$next_y]=0
+            fi
+
             P_X=$next_x
             P_Y=$next_y
+            (( TOTAL_STEPS++ ))
+
+            if (( RANDOM % 100 < 85 )); then
+                if (( E_X < P_X && "${map[$((E_X+1)),$E_Y]}" != "1" )); then (( E_X++ ))
+                elif (( E_X > P_X && "${map[$((E_X-1)),$E_Y]}" != "1" )); then (( E_X-- ))
+                elif (( E_Y < P_Y && "${map[$E_X,$((E_Y+1))]}" != "1" )); then (( E_Y++ ))
+                elif (( E_Y > P_Y && "${map[$E_X,$((E_Y-1))]}" != "1" )); then (( E_Y-- ))
+                fi
+            fi
         fi
     done
 
-    # Handle completion transition or total victory
     if [ "$level_won" = true ]; then
         stty cooked echo
         clear
         if (( LEVEL == END_LEVEL )); then
-            echo -e "\033[1;32m🎉 TOTAL VICTORY! You conquered your Custom Tier at Level $LEVEL! 🎉\033[0m"
+            echo -e "\033[1;32m🎉 TOTAL S-TIER VICTORY! You escaped with a score of $TOTAL_STEPS steps! 🎉\033[0m"
             exit 0
         else
-            echo -e "\033[1;33mLevel $LEVEL Completed! Loading next map layer...\033[0m"
-            sleep 1.0
+            echo -e "\033[1;33mLevel $LEVEL Cleared! Gate bypassed. Initializing next configuration vector...\033[0m"
+            sleep 1.2
             (( LEVEL++ ))
         fi
     fi
