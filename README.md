@@ -1,4 +1,4 @@
-TermProMaze Is essentially TermuxMazeRunner
+TermProMaze Is essentially TermuxMazeWalker
 With some special upgrades TermProMaze is a much more better version of termuxmazerunner
 REQUIREMENTS: TermProMaze doesnt require that much to run
 It needs, Bash, and a text editor
